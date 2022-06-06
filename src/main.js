@@ -1,6 +1,6 @@
 import { Scene, PerspectiveCamera, WebGLRenderer, DirectionalLight, ACESFilmicToneMapping, sRGBEncoding, PCFSoftShadowMap,
          Mesh, SphereGeometry, MeshPhysicalMaterial, Color, TextureLoader, PMREMGenerator, FloatType, Group, Vector2, Vector3,
-         Clock, PlaneGeometry, RingGeometry, DoubleSide} 
+         Clock, PlaneGeometry, RingGeometry, DoubleSide, Object3D, BackSide} 
     from 'https://cdn.skypack.dev/three@0.137';
 
 import { OrbitControls } from 'https://cdn.skypack.dev/three-stdlib@2.8.5/controls/OrbitControls';
@@ -129,20 +129,22 @@ window.addEventListener("mousemove", (e) => {
         map: await new TextureLoader().loadAsync('textures/earthmap.jpg'),
         spec: await new TextureLoader().loadAsync('textures/earthspec.jpg'),
         planeTrailMask: await new TextureLoader().loadAsync('textures/mask.png'),
-        clouds: await new TextureLoader().loadAsync('textures/earthcloud.png')
+        clouds: await new TextureLoader().loadAsync('textures/earthcloud.png'),
+        // de pe site-ul NASA
+        moonMap: await new TextureLoader().loadAsync('textures/moonmap.jpg')
     }
 
     // "Cartoon Plane" by antonmoek (https://skfb.ly/UOLT)
     let plane = (await new GLTFLoader().loadAsync('textures/plane/scene.glb')).scene.children[0];
     let planesData = [
         makePlane(plane, textures.planeTrailMask, envMap, scene),
-        makePlane(plane, textures.planeTrailMask, envMap, scene),
-        makePlane(plane, textures.planeTrailMask, envMap, scene),
-        makePlane(plane, textures.planeTrailMask, envMap, scene),
-        makePlane(plane, textures.planeTrailMask, envMap, scene),
-        makePlane(plane, textures.planeTrailMask, envMap, scene),
-        makePlane(plane, textures.planeTrailMask, envMap, scene),
-        makePlane(plane, textures.planeTrailMask, envMap, scene),
+        // makePlane(plane, textures.planeTrailMask, envMap, scene),
+        // makePlane(plane, textures.planeTrailMask, envMap, scene),
+        // makePlane(plane, textures.planeTrailMask, envMap, scene),
+        // makePlane(plane, textures.planeTrailMask, envMap, scene),
+        // makePlane(plane, textures.planeTrailMask, envMap, scene),
+        // makePlane(plane, textures.planeTrailMask, envMap, scene),
+
     ]
 
     let earth = new Mesh(
@@ -164,6 +166,22 @@ window.addEventListener("mousemove", (e) => {
     earth.rotation.y += Math.PI * 1.25;
     earth.receiveShadow = true;
     scene.add(earth);
+
+    let moon = new Mesh(
+        new SphereGeometry(3, 70, 70),
+        new MeshPhysicalMaterial({
+            map: textures.moonMap,
+            sheen: 0,
+            sheenRoughness: 0.75,
+            sheenColor: new Color('#DCDCDC').convertSRGBToLinear()
+        })
+    )
+    moon.position.set(30, 0, 0);
+    earth.add(moon);
+
+    let moonObj = new Object3D();
+    moonObj.add(moon);
+    scene.add(moonObj);
 
     let clouds = new Mesh(
         new SphereGeometry(10.2, 70, 70),
@@ -193,34 +211,35 @@ window.addEventListener("mousemove", (e) => {
 
         animating = true;
 
-        let obj = { t: 0 };
+        let obj = { lambda: 0 };
 
         anime({
             targets: obj,
-            t: anim,
+            lambda: anim,
             complete: () => {
                 animating = false;
                 daytime = !daytime;
             },
             update: () => {
-                sunLight.intesity = 3.5 * (1 - obj.t);
-                moonLight.intesity = 3.5 * obj.t;
+                sunLight.intesity = 3.5 * (1 - obj.lambda);
+                moonLight.intesity = 3.5 * obj.lambda;
 
-                sunLight.position.setY(20 * (1 - obj.t));
-                moonLight.position.setY(20 * obj.t);
+                sunLight.position.setY(50 * (1 - obj.lambda));
+                moonLight.position.setY(50 * obj.lambda);
 
-                earth.material.sheen = (1 - obj.t);
+                earth.material.sheen = (1 - obj.lambda);
+                moon.material.sheen = obj.lambda;
 
                 scene.children.forEach((child) => {
                     child.traverse((object) => {
                         if(object instanceof Mesh && object.material.envMap) {
-                            object.material.envMapIntensity = object.sunEnvIntensity * (1 - obj.t) + object.moonEnvIntensity * obj.t;
+                            object.material.envMapIntensity = object.sunEnvIntensity * (1 - obj.lambda) + object.moonEnvIntensity * obj.lambda;
                         }
                     })
                 })
 
-                sunBackgroud.style.opacity = 1 - obj.t;
-                moonBackground.style.opacity = obj.t;
+                sunBackgroud.style.opacity = 1 - obj.lambda;
+                moonBackground.style.opacity = obj.lambda;
             },
             easing: 'easeInOutSine',
             duration: 500            
@@ -229,10 +248,15 @@ window.addEventListener("mousemove", (e) => {
 
     renderer.setAnimationLoop(() => {
         let delta = clock.getDelta();
+
         earth.rotation.y += delta * 0.05;
 
         clouds.rotation.y -= delta * 0.04;
         clouds.rotation.x -= delta * 0.03;
+        
+        moonObj.rotation.y -= delta * 0.03;
+        
+
         planesData.forEach(planeData => {
             let plane = planeData.group;
 
@@ -245,7 +269,7 @@ window.addEventListener("mousemove", (e) => {
             plane.rotateOnAxis(new Vector3(0, 1, 0), planeData.rot); // y-axis rotation
             plane.rotateOnAxis(new Vector3(0, 0, 1), planeData.rad); // this decides the radius
             plane.translateY(planeData.yOff);
-            plane.rotateOnAxis(new Vector3(1, 0, 0), +Math.PI * 0.5);
+            plane.rotateOnAxis(new Vector3(1, 0, 0), +Math.PI * 0.5); // put the plane horizontal to the Earth
         })
 
 
@@ -270,7 +294,7 @@ window.addEventListener("mousemove", (e) => {
 
 function makePlane(planeMesh, trailTexture, envMap, scene){
     let plane = planeMesh.clone();
-    plane.scale.set(0.001, 0.001, 0.001);
+    plane.scale.set(0.002, 0.002, 0.002);
     plane.position.set(0, 0, 0);
     plane.rotation.set(0, 0, 0);
     plane.updateMatrixWorld();
